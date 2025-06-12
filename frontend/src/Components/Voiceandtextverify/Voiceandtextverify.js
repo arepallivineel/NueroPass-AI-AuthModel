@@ -15,17 +15,37 @@ function Voiceandtextverify() {
     const [recordingComplete, setRecordingComplete] = useState(false);
     const [voiceMatchStatus, setVoiceMatchStatus] = useState(null);
     const [audioBlob, setAudioBlob] = useState(null);
+    const [attempts, setAttempts] = useState(0);
+    const [usedQuestions, setUsedQuestions] = useState(new Set());
     const mediaRecorderRef = useRef(null);
     const audioChunksRef = useRef([]);
+    const MAX_ATTEMPTS = 3;
+
+    const getRandomQuestion = () => {
+        const availableQuestions = securityQuestions.filter(q => !usedQuestions.has(q.question));
+        
+        // If all questions have been used, reset the used questions set
+        if (availableQuestions.length === 0) {
+            setUsedQuestions(new Set());
+            return securityQuestions[Math.floor(Math.random() * securityQuestions.length)];
+        }
+        
+        const randomIndex = Math.floor(Math.random() * availableQuestions.length);
+        const newQuestion = availableQuestions[randomIndex];
+        
+        // Add the question to used questions set
+        setUsedQuestions(prev => new Set([...prev, newQuestion.question]));
+        
+        return newQuestion;
+    };
 
     useEffect(() => {
-        // Randomly select a question when component mounts
-        const randomIndex = Math.floor(Math.random() * securityQuestions.length);
-        setCurrentQuestion(securityQuestions[randomIndex]);
+        setCurrentQuestion(getRandomQuestion());
     }, []);
 
     const handleAnswerSelect = (option) => {
         setSelectedAnswer(option);
+        setVerificationStatus(null);
     };
 
     const startRecording = async () => {
@@ -119,7 +139,25 @@ function Voiceandtextverify() {
                 }, 2000);
             }
         } else {
+            const newAttempts = attempts + 1;
+            setAttempts(newAttempts);
+            
+            if (newAttempts >= MAX_ATTEMPTS) {
+                setVerificationStatus('aborted');
+                // Redirect to dashboard after showing the aborted message
+                setTimeout(() => {
+                    navigate('/dashboard');
+                }, 3000);
+                return;
+            }
+            
             setVerificationStatus('failed');
+            // Wait for a short delay before showing new question
+            setTimeout(() => {
+                setCurrentQuestion(getRandomQuestion());
+                setSelectedAnswer('');
+                setVerificationStatus(null);
+            }, 1500);
         }
     };
 
@@ -131,6 +169,12 @@ function Voiceandtextverify() {
         <div className="voiceandtextverify-container">
             <h2>Voice and Text Verification</h2>
             
+            {attempts < MAX_ATTEMPTS && (
+                <div className="attempts-info">
+                    Attempts remaining: {MAX_ATTEMPTS - attempts}
+                </div>
+            )}
+            
             <div className="verification-section">
                 <h3>1. Security Question</h3>
                 <div className="question-section">
@@ -141,20 +185,27 @@ function Voiceandtextverify() {
                                 key={index}
                                 className={`option-button ${selectedAnswer === option ? 'selected' : ''}`}
                                 onClick={() => handleAnswerSelect(option)}
+                                disabled={verificationStatus === 'aborted'}
                             >
                                 {option}
                             </button>
                         ))}
                     </div>
                 </div>
-                <button className="verify-button" onClick={handleVerify}>
+                <button 
+                    className="verify-button" 
+                    onClick={handleVerify}
+                    disabled={verificationStatus === 'aborted'}
+                >
                     Verify Answer
                 </button>
                 {verificationStatus && (
                     <div className={`status-message ${verificationStatus}`}>
                         {verificationStatus === 'success' 
                             ? 'Security question verified successfully!' 
-                            : 'Incorrect answer. Please try again.'}
+                            : verificationStatus === 'aborted'
+                            ? 'VERIFICATION FAILED. TRANSACTION ABORTED!'
+                            : 'Incorrect answer. Loading new question...'}
                     </div>
                 )}
             </div>
@@ -167,7 +218,7 @@ function Voiceandtextverify() {
                         <button 
                             className="record-button"
                             onClick={startRecording}
-                            disabled={isRecording}
+                            disabled={isRecording || verificationStatus === 'aborted'}
                         >
                             Start Recording
                         </button>
@@ -175,6 +226,7 @@ function Voiceandtextverify() {
                         <button 
                             className="record-button recording"
                             onClick={stopRecording}
+                            disabled={verificationStatus === 'aborted'}
                         >
                             Stop Recording
                         </button>
@@ -183,6 +235,7 @@ function Voiceandtextverify() {
                         <button 
                             className="submit-button"
                             onClick={handleVoiceVerification}
+                            disabled={verificationStatus === 'aborted'}
                         >
                             Submit Voice Recording
                         </button>
@@ -199,12 +252,6 @@ function Voiceandtextverify() {
                     </div>
                 )}
             </div>
-
-            {verificationStatus === 'success' && voiceMatchStatus === 'success' && (
-                <div className="final-status success">
-                    Fund transfer successful! Redirecting to dashboard...
-                </div>
-            )}
         </div>
     );
 }

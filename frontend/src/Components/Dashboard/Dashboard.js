@@ -20,7 +20,7 @@ function Dashboard() {
         e.preventDefault();
         if (amount > 0) {
             setMessageType('success');
-            setTransferMessage('Transfer Successful');
+            setTransferMessage('Transfer in Progress');
             setTimeout(() => {
                 if (parseFloat(amount) <= 100000) {
                     navigate('/textverify');
